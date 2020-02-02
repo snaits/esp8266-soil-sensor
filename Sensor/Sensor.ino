@@ -6,11 +6,15 @@
 
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
+const int chipId = system_get_chip_id();
+bool feedExists = false;
 
 void setup() {
   Serial.begin(115200);
   delay(100);
   Serial.println();
+  Serial.print("Chip id ");
+  Serial.println(chipId);
   Serial.print("Connecting to ");
   Serial.println(ssid);
   
@@ -27,19 +31,43 @@ void setup() {
   Serial.println(WiFi.localIP());
 }
 void loop() {
+  createFeed(chipId);
+  
   int avalue = analogRead(A0);
   Serial.println(avalue);
   HTTPClient http;
   String apiUrl = "https://io.adafruit.com/api/v2/";
-  http.begin(apiUrl + IO_USERNAME + "/feeds/" + IO_FEED_KEY + "/data",  "77 00 54 2d da e7 d8 03 27 31 23 99 eb 27 db cb a5 4c 57 18");
+  http.begin(apiUrl + IO_USERNAME + "/feeds/" + chipId + "/data",  IO_FINGERPRINT);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-AIO-Key", IO_KEY);
   String startValue = "{\"value\":";
   int httpCode = http.POST(startValue + avalue + "}");
   http.writeToStream(&Serial);
   http.end();
-  String responseStatus = "Response status: ";
-  Serial.println(responseStatus + httpCode);
+  Serial.print("Response status: ");
+  Serial.println(httpCode);
   Serial.println("closing connection");
   ESP.deepSleep(ESP.deepSleepMax());
+}
+
+void createFeed(int chipId){
+  HTTPClient http;
+  String apiUrl = "https://io.adafruit.com/api/v2/";
+  http.begin(apiUrl + IO_USERNAME + "/feeds/",  IO_FINGERPRINT);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-AIO-Key", IO_KEY);
+  String startValue = "{ \"feed\": {\"name\":";
+  int httpCode = http.POST(startValue + chipId + "} }");
+  http.writeToStream(&Serial);
+  http.end();
+  Serial.print("Response status: ");
+  Serial.println(httpCode);
+  feedExists = true;
+  if(system_rtc_mem_write(64, &feedExists, sizeof(bool)))
+  {
+    Serial.println("Feed exists, saved for later");
+  }
+  else{
+    Serial.println("Could not store feed exists.");
+  }
 }
