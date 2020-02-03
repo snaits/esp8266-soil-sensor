@@ -25,16 +25,16 @@ void setup() {
     Serial.print(".");
   }
  
-  Serial.println("");
   Serial.println("WiFi connected");  
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
 void loop() {
-  createFeed(chipId);
+  createFeed(chipId); 
   
   int avalue = analogRead(A0);
   Serial.println(avalue);
+  
   HTTPClient http;
   String apiUrl = "https://io.adafruit.com/api/v2/";
   http.begin(apiUrl + IO_USERNAME + "/feeds/" + chipId + "/data",  IO_FINGERPRINT);
@@ -44,13 +44,24 @@ void loop() {
   int httpCode = http.POST(startValue + avalue + "}");
   http.writeToStream(&Serial);
   http.end();
+  
   Serial.print("Response status: ");
   Serial.println(httpCode);
-  Serial.println("closing connection");
-  ESP.deepSleep(ESP.deepSleepMax());
+  
+  //the RTC speed varies with temperature - so to be sure make room for errors
+  ESP.deepSleep(0.9 * ESP.deepSleepMax());
+  delay(100);
 }
 
 void createFeed(int chipId){
+  if(ESP.rtcUserMemoryRead(0, (uint32_t*) &feedExists, sizeof(feedExists))) {
+    Serial.println("Read: ");
+    Serial.println(feedExists);
+    if((bool)feedExists == true){
+      Serial.println("Feed exists, returning");
+      return;
+    }
+  }
   HTTPClient http;
   String apiUrl = "https://io.adafruit.com/api/v2/";
   http.begin(apiUrl + IO_USERNAME + "/feeds/",  IO_FINGERPRINT);
@@ -63,7 +74,7 @@ void createFeed(int chipId){
   Serial.print("Response status: ");
   Serial.println(httpCode);
   feedExists = true;
-  if(system_rtc_mem_write(64, &feedExists, sizeof(bool)))
+  if(ESP.rtcUserMemoryWrite(0, (uint32_t*) &feedExists, sizeof(feedExists)))
   {
     Serial.println("Feed exists, saved for later");
   }
